@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart Waste Segregation</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0a;
+    --surface: #111111;
+    --surface2: #1a1a1a;
+    --border: #2a2a2a;
+    --text: #f0ede8;
+    --muted: #666;
+    --organic: #22c55e;
+    --recyclable: #3b82f6;
+    --trash: #64748b;
+    --accent: #d4ff00;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'DM Mono', monospace;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* ── Header ── */
+  header {
+    width: 100%;
+    max-width: 900px;
+    padding: 48px 24px 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+  }
+
+  .logo {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.4rem, 4vw, 2rem);
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  .logo span { color: var(--accent); }
+
+  .status-dot {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    animation: pulse 2s ease-in-out infinite;
+  }
+  .dot.online { background: var(--organic); }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+
+  /* ── Main layout ── */
+  main {
+    width: 100%;
+    max-width: 900px;
+    padding: 40px 24px 80px;
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+  }
+
+  /* ── Upload zone ── */
+  .upload-zone {
+    border: 1.5px dashed var(--border);
+    border-radius: 16px;
+    background: var(--surface);
+    padding: 56px 24px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .upload-zone:hover, .upload-zone.dragover {
+    border-color: var(--accent);
+    background: #141414;
+  }
+
+  .upload-zone.has-image {
+    padding: 0;
+    border-style: solid;
+    border-color: var(--border);
+  }
+
+  .upload-icon {
+    font-size: 2.5rem;
+    opacity: 0.5;
+  }
+
+  .upload-text {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--text);
+  }
+
+  .upload-sub {
+    font-size: 0.72rem;
+    color: var(--muted);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .upload-zone input[type="file"] {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+    cursor: pointer;
+  }
+
+  #preview-img {
+    width: 100%;
+    max-height: 340px;
+    object-fit: contain;
+    border-radius: 14px;
+    display: none;
+  }
+
+  .upload-zone.has-image #preview-img { display: block; }
+  .upload-zone.has-image .upload-icon,
+  .upload-zone.has-image .upload-text,
+  .upload-zone.has-image .upload-sub { display: none; }
+
+  /* ── Classify button ── */
+  #classify-btn {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    width: 100%;
+    padding: 18px;
+    background: var(--accent);
+    color: #0a0a0a;
+    border: none;
+    border-radius: 12px;
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: 1rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: opacity 0.15s, transform 0.15s;
+  }
+
+  #classify-btn:hover { opacity: 0.88; transform: translateY(-1px); }
+  #classify-btn:active { transform: translateY(0); }
+  #classify-btn.visible { display: flex; }
+  #classify-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* ── Loading ── */
+  .loader {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    padding: 32px;
+    color: var(--muted);
+    font-size: 0.75rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .loader.visible { display: flex; }
+
+  .spinner {
+    width: 32px; height: 32px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Result card ── */
+  #result {
+    display: none;
+    flex-direction: column;
+    gap: 20px;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  #result.visible { display: flex; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(16px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .result-primary {
+    border-radius: 16px;
+    padding: 28px 28px 24px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .result-primary::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    opacity: 0.08;
+    background: currentColor;
+  }
+
+  .result-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .result-class {
+    font-family: 'Syne', sans-serif;
+    font-weight: 800;
+    font-size: clamp(1.6rem, 5vw, 2.2rem);
+    letter-spacing: -0.02em;
+    text-transform: capitalize;
+  }
+
+  .result-bin {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 100px;
+    padding: 8px 16px;
+    font-size: 0.75rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .confidence-bar {
+    height: 4px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    overflow: hidden;
+    margin-bottom: 12px;
+  }
+
+  .confidence-fill {
+    height: 100%;
+    border-radius: 2px;
+    background: currentColor;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+    width: 0%;
+  }
+
+  .confidence-label {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.5);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .result-tip {
+    margin-top: 16px;
+    font-size: 0.8rem;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.6;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    padding-top: 16px;
+  }
+
+  /* ── Do/Don't ── */
+  .do-dont {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  @media (max-width: 520px) { .do-dont { grid-template-columns: 1fr; } }
+
+  .do-card, .dont-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 18px;
+  }
+
+  .card-label {
+    font-family: 'Syne', sans-serif;
+    font-weight: 700;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+
+  .do-card .card-label { color: var(--organic); }
+  .dont-card .card-label { color: #f87171; }
+
+  .card-list {
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .card-list li {
+    font-size: 0.75rem;
+    color: var(--muted);
+    padding-left: 14px;
+    position: relative;
+    line-height: 1.5;
+  }
+
+  .do-card .card-list li::before { content: '✓'; color: var(--organic); position: absolute; left: 0; font-size: 0.7rem; }
+  .dont-card .card-list li::before { content: '✕'; color: #f87171; position: absolute; left: 0; font-size: 0.7rem; }
+
+  /* ── Top-3 ── */
+  .top3 {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+  }
+
+  .top3-label {
+    font-size: 0.68rem;
+    color: var(--muted);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .top3-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .top3-item:last-child { margin-bottom: 0; }
+
+  .top3-name {
+    width: 90px;
+    font-size: 0.75rem;
+    text-transform: capitalize;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+
+  .top3-bar-wrap {
+    flex: 1;
+    height: 6px;
+    background: var(--border);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+
+  .top3-bar {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .top3-pct {
+    width: 44px;
+    text-align: right;
+    font-size: 0.72rem;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  /* ── Mock badge ── */
+  .mock-badge {
+    display: none;
+    align-items: center;
+    gap: 6px;
+    background: rgba(234,179,8,0.12);
+    border: 1px solid rgba(234,179,8,0.3);
+    color: #fbbf24;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+  }
+
+  .mock-badge.visible { display: flex; }
+
+  /* ── Reset ── */
+  #reset-btn {
+    display: none;
+    background: none;
+    border: 1px solid var(--border);
+    color: var(--muted);
+    border-radius: 10px;
+    padding: 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    letter-spacing: 0.06em;
+    transition: border-color 0.2s, color 0.2s;
+  }
+
+  #reset-btn:hover { border-color: var(--text); color: var(--text); }
+  #reset-btn.visible { display: block; }
+
+  /* ── Error ── */
+  #error-msg {
+    display: none;
+    background: rgba(239,68,68,0.1);
+    border: 1px solid rgba(239,68,68,0.3);
+    color: #fca5a5;
+    border-radius: 10px;
+    padding: 14px 16px;
+    font-size: 0.78rem;
+    line-height: 1.5;
+  }
+
+  #error-msg.visible { display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Smart<br><span>Waste</span> AI</div>
+  <div class="status-dot">
+    <div class="dot" id="status-dot"></div>
+    <span id="status-text">Checking...</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- Upload -->
+  <div class="upload-zone" id="upload-zone">
+    <input type="file" id="file-input" accept="image/*">
+    <div class="upload-icon">📷</div>
+    <div class="upload-text">Drop an image here</div>
+    <div class="upload-sub">or click to browse · jpg, png, webp</div>
+    <img id="preview-img" alt="Preview">
+  </div>
+
+  <!-- Classify -->
+  <button id="classify-btn">⚡ Classify Waste</button>
+
+  <!-- Loader -->
+  <div class="loader" id="loader">
+    <div class="spinner"></div>
+    Analysing image...
+  </div>
+
+  <!-- Error -->
+  <div id="error-msg"></div>
+
+  <!-- Mock warning -->
+  <div class="mock-badge" id="mock-badge">
+    ⚠ Model not loaded — results are random (mock mode)
+  </div>
+
+  <!-- Result -->
+  <div id="result">
+
+    <div class="result-primary" id="result-primary">
+      <div class="result-header">
+        <div class="result-class" id="result-class-name">—</div>
+        <div class="result-bin" id="result-bin">— Bin</div>
+      </div>
+      <div class="confidence-bar">
+        <div class="confidence-fill" id="conf-fill"></div>
+      </div>
+      <div class="confidence-label">Confidence: <span id="conf-pct">—</span></div>
+      <div class="result-tip" id="result-tip"></div>
+    </div>
+
+    <div class="do-dont">
+      <div class="do-card">
+        <div class="card-label">✓ Do</div>
+        <ul class="card-list" id="do-list"></ul>
+      </div>
+      <div class="dont-card">
+        <div class="card-label">✕ Don't</div>
+        <ul class="card-list" id="dont-list"></ul>
+      </div>
+    </div>
+
+    <div class="top3" id="top3-section">
+      <div class="top3-label">Top predictions</div>
+      <div id="top3-bars"></div>
+    </div>
+
+  </div>
+
+  <!-- Reset -->
+  <button id="reset-btn">↺ Try another image</button>
+
+</main>
+
+<script>
+  const API_BASE = 'http://localhost:5000';
+
+  const CLASS_COLORS = {
+    organic:    '#22c55e',
+    recyclable: '#3b82f6',
+    trash:      '#64748b'
+  };
+
+  // ── Elements ──
+  const uploadZone   = document.getElementById('upload-zone');
+  const fileInput    = document.getElementById('file-input');
+  const previewImg   = document.getElementById('preview-img');
+  const classifyBtn  = document.getElementById('classify-btn');
+  const loader       = document.getElementById('loader');
+  const result       = document.getElementById('result');
+  const errorMsg     = document.getElementById('error-msg');
+  const mockBadge    = document.getElementById('mock-badge');
+  const resetBtn     = document.getElementById('reset-btn');
+  const statusDot    = document.getElementById('status-dot');
+  const statusText   = document.getElementById('status-text');
+
+  let selectedFile = null;
+
+  // ── Health check ──
+  async function checkHealth() {
+    try {
+      const res = await fetch(`${API_BASE}/api/health`);
+      const data = await res.json();
+      if (data.status === 'ok') {
+        statusDot.classList.add('online');
+        statusText.textContent = data.model_loaded ? 'Model ready' : 'Mock mode';
+      }
+    } catch {
+      statusText.textContent = 'API offline';
+    }
+  }
+
+  checkHealth();
+
+  // ── Drag & drop ──
+  uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragover'); });
+  uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragover'));
+  uploadZone.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) handleFile(f);
+  });
+
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) handleFile(fileInput.files[0]);
+  });
+
+  function handleFile(file) {
+    selectedFile = file;
+    const reader = new FileReader();
+    reader.onload = e => {
+      previewImg.src = e.target.result;
+      uploadZone.classList.add('has-image');
+      classifyBtn.classList.add('visible');
+      hideResult();
+    };
+    reader.readAsDataURL(file);
+  }
+
+  // ── Classify ──
+  classifyBtn.addEventListener('click', async () => {
+    if (!selectedFile) return;
+
+    classifyBtn.disabled = true;
+    loader.classList.add('visible');
+    errorMsg.classList.remove('visible');
+    hideResult();
+
+    try {
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const res = await fetch(`${API_BASE}/api/predict`, {
+        method: 'POST',
+        body: formData
+      });
+
+      const data = await res.json();
+
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'Prediction failed');
+      }
+
+      showResult(data);
+    } catch (err) {
+      errorMsg.textContent = `Error: ${err.message}. Make sure Flask is running on port 5000.`;
+      errorMsg.classList.add('visible');
+    } finally {
+      loader.classList.remove('visible');
+      classifyBtn.disabled = false;
+    }
+  });
+
+  // ── Render result ──
+  function showResult(data) {
+    const p = data.prediction;
+    const color = CLASS_COLORS[p.class] || '#888';
+
+    // Primary card
+    const primary = document.getElementById('result-primary');
+    primary.style.color = color;
+    primary.style.borderLeft = `4px solid ${color}`;
+    primary.style.background = `linear-gradient(135deg, ${color}10 0%, #11111100 100%)`;
+
+    document.getElementById('result-class-name').textContent = `${p.emoji} ${p.class}`;
+    document.getElementById('result-bin').textContent = `${p.bin_emoji} ${p.bin}`;
+    document.getElementById('result-tip').textContent = p.tip;
+    document.getElementById('conf-pct').textContent = `${p.confidence}%`;
+
+    const fill = document.getElementById('conf-fill');
+    fill.style.background = color;
+    setTimeout(() => { fill.style.width = `${p.confidence}%`; }, 50);
+
+    // Do / Don't
+    const doList = document.getElementById('do-list');
+    doList.innerHTML = p.do.map(t => `<li>${t}</li>`).join('');
+    const dontList = document.getElementById('dont-list');
+    dontList.innerHTML = p.dont.map(t => `<li>${t}</li>`).join('');
+
+    // Top-3 bars
+    const barsEl = document.getElementById('top3-bars');
+    barsEl.innerHTML = '';
+    data.top3.forEach(item => {
+      const c = CLASS_COLORS[item.class] || '#888';
+      const div = document.createElement('div');
+      div.className = 'top3-item';
+      div.innerHTML = `
+        <div class="top3-name">${item.class}</div>
+        <div class="top3-bar-wrap">
+          <div class="top3-bar" style="background:${c}; width:0%"
+               data-w="${item.confidence}"></div>
+        </div>
+        <div class="top3-pct">${item.confidence}%</div>
+      `;
+      barsEl.appendChild(div);
+    });
+
+    setTimeout(() => {
+      barsEl.querySelectorAll('.top3-bar').forEach(b => {
+        b.style.width = b.dataset.w + '%';
+      });
+    }, 80);
+
+    // Mock badge
+    mockBadge.classList.toggle('visible', !!data.mock_mode);
+
+    result.classList.add('visible');
+    resetBtn.classList.add('visible');
+  }
+
+  function hideResult() {
+    result.classList.remove('visible');
+    resetBtn.classList.remove('visible');
+    mockBadge.classList.remove('visible');
+  }
+
+  // ── Reset ──
+  resetBtn.addEventListener('click', () => {
+    selectedFile = null;
+    fileInput.value = '';
+    previewImg.src = '';
+    uploadZone.classList.remove('has-image');
+    classifyBtn.classList.remove('visible');
+    hideResult();
+    errorMsg.classList.remove('visible');
+    // Animate confidence fill back
+    document.getElementById('conf-fill').style.width = '0%';
+  });
+</script>
+</body>
+</html>
